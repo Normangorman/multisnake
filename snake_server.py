@@ -2,6 +2,13 @@ import socketserver
 from vectors import *
 from gameboard import *
 import json
+import time
+
+HOST = "localhost"
+PORT = 9999
+NUM_PLAYERS = 2
+BOARD_WIDTH = 10
+BOARD_HEIGHT = 10
 
 class SnakeGame():
     def __init__(self, numPlayers, boardWidth, boardHeight):
@@ -12,16 +19,16 @@ class SnakeGame():
 
         self.receivedMoves = []
         self.numMovesReceived = 0
+        self.waitingClients = []
 
     def receiveMoveRequestObject(self, moveRequestObject):
         self.numMovesReceived += 1
+        self.receivedMoves.append(moveRequestObject)
         return
 
     def getResponseObject(self):
         self.numMovesReceived = 0 # reset in preparation for next turn
-        return '{"idNum": 10, "success": true}'
-
-GAME = SnakeGame(1, 10, 10)
+        return {"idNum": 10, "success": True}
 
 class SnakeServer(socketserver.BaseRequestHandler):
     """
@@ -39,13 +46,24 @@ class SnakeServer(socketserver.BaseRequestHandler):
         GAME.receiveMoveRequestObject(data)
         print("Number of moves received: ", GAME.numMovesReceived)
 
+        GAME.waitingClients.append(self)
+
         if GAME.numMovesReceived == GAME.numPlayers:
-            responseObject = GAME.getResponseObject()
-            print("Received moves from all players.")
-            print("Sending response: ", str(responseObject))
-            
-            response = bytes( json.dumps(responseObject), 'UTF-8' )
-            self.request.sendall(response)
+            # Send the data to all waiting clients
+            print("All clients have sent their moves.")
+            responseString = json.dumps( GAME.getResponseObject() )
+            print("Sending response to all clients: ", responseString)
+
+            response = bytes( responseString, 'UTF-8' )
+
+            for client in GAME.waitingClients:
+                client.request.sendall(response)
+                #client.request.close()
+        else:
+            numToGo = GAME.numPlayers - GAME.numMovesReceived
+            print("Still waiting for {} clients.".format(numToGo))
+
+GAME = SnakeGame(NUM_PLAYERS, BOARD_WIDTH, BOARD_HEIGHT)
 
 if __name__ == "__main__":
     HOST, PORT = "localhost", 9999

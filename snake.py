@@ -33,7 +33,6 @@ class Snake():
             }
         return request
     
-    # TODO
     def receiveMovementResponse(self, response):
         if response.success == true:
             d = self.direction
@@ -74,7 +73,7 @@ class SnakeClient():
             sock.sendall(bytes(request_string + "\n", "utf-8"))
 
             # Receive data from the server and shut down
-            response = str(sock.recv(1024), "utf-8")
+            response = sock.recv(1024).decode("utf-8")
         finally:
             sock.close()
 
@@ -112,12 +111,13 @@ class GameManager():
             self.gameBoard.markCell(snake.gridPos, snake.idNum)
             
         # Send local snake data to server and get info about the other snake movements.
-        response = self.snakeClient.sendSnakeDataGetResponse(self.localPlayer.getMovementRequest())
-        print("GameManager.update: response = " + str(response))
+        mv_req        = self.localPlayer.getMovementRequest()
+        json_response = self.snakeClient.sendSnakeDataGetResponse(mv_req)
+        response      = json.loads(json_response)
 
-        decoded_response = json.loads(json.loads(response))
-        print("GameManager.update: decoded_response = ", decoded_response)
-        print("GameManager.update: decoded_response[\"success\"] = ", decoded_response["success"])
+        print("GameManager.update: json_response = " + str(response))
+
+        print("GameManager.update: response[\"success\"] = ", response["success"])
     
         
     def render(self):
