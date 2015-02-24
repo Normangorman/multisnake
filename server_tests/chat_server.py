@@ -4,8 +4,10 @@ CONNECTION_LIST = []
 NICKNAMES = {}
 RECV_BUFFER = 4096
 PORT = 5000
+HOST = "0.0.0.0"
+WELCOME_MESSAGE = "Welcome to the server! Type '/nickname yournicknamehere' to change your nickname!"
  
-#Function to broadcast chat messages to all connected clients
+# Function to broadcast chat messages to all connected clients
 def broadcast_data (sock, message):
     #Do not send the message to master socket and the client who has send us the message
     for socket in CONNECTION_LIST:
@@ -23,7 +25,7 @@ def logMessage(msg):
  
 if __name__ == "__main__":
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("localhost", PORT))
+    server_socket.bind((HOST, PORT))
     server_socket.listen(10)
  
     CONNECTION_LIST.append(server_socket)
@@ -39,6 +41,7 @@ if __name__ == "__main__":
                 # Handle the case in which there is a new connection recieved through server_socket
                 (sockfd, addr) = server_socket.accept()
                 CONNECTION_LIST.append(sockfd)
+                sock.send(bytes(WELCOME_MESSAGE, "UTF_8"))
                  
                 broadcast_data(sockfd, "[{0}] entered room\n".format(addr))
             else: # there's incoming data
