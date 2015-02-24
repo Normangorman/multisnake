@@ -16,19 +16,20 @@ if __name__ == "__main__":
     port = int(sys.argv[2])
      
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(2)
+    print("Created socket.")
      
     # connect to remote host
-    try :
+    try:
+        print("Attempting to connect to server...")
         s.connect((host, port))
-    except :
+    except:
         print('Unable to connect')
         sys.exit()
      
     print('Connected to remote host. Start sending messages')
     prompt()
      
-    while 1:
+    while True:
         socket_list = [sys.stdin, s]
          
         # Get the list sockets which are readable
