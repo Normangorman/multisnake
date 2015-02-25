@@ -1,4 +1,4 @@
-# telnet program example
+#!/usr/bin/python3
 import socket, select, string, sys, threading
  
 HOST = "178.62.94.90"

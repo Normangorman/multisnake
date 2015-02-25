@@ -41,7 +41,7 @@ if __name__ == "__main__":
                 # Handle the case in which there is a new connection recieved through server_socket
                 (sockfd, addr) = server_socket.accept()
                 CONNECTION_LIST.append(sockfd)
-                sock.send(bytes(WELCOME_MESSAGE, "UTF_8"))
+                sockfd.send(bytes(WELCOME_MESSAGE, "UTF_8"))
                  
                 broadcast_data(sockfd, "[{0}] entered room\n".format(addr))
             else: # there's incoming data
