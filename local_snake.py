@@ -19,6 +19,7 @@ SERVER_PORT = 9999
 SOLID_WALLS = False
 GRID_BACKGROUND_COLOUR_1 = "#FFFF66"
 GRID_BACKGROUND_COLOUR_2 = "#FFFF94"
+WINDOW_TITLE = "Cobra"
 
 class Vector2():
     def __init__(self, x, y):
@@ -189,8 +190,8 @@ class UIManager():
         numRowsUsed += 1
         self.statusLine = statusLine
 
-        canvas = Canvas(self.master, width=WIDTH, height=HEIGHT)
-        canvas.grid(row=numRowsUsed, column=0, columnspan=3, pady=10)
+        canvas = Canvas(self.master, width=WIDTH, height=HEIGHT, borderwidth=2, relief="raised")
+        canvas.grid(row=numRowsUsed, column=0, columnspan=3, pady=10, padx=10)
         self.canvas = canvas
 
     def updateSnakeScores(self, snakes):
@@ -212,8 +213,8 @@ class UIManager():
 
     def renderSquare(self, vecPos, colour=SNAKE_DEFAULT_COLOUR):
         # + 1px so as to not coincide with grid lines
-        xpos = vecPos.x * CELL_SIZE + 1
-        ypos = vecPos.y * CELL_SIZE + 1
+        xpos = vecPos.x * CELL_SIZE + 5
+        ypos = vecPos.y * CELL_SIZE + 5
         width = CELL_SIZE - 2
         height = CELL_SIZE - 2
         
@@ -253,11 +254,11 @@ class UIManager():
 
     def renderScenery(self):
         for i in range(1, NUM_COLS):
-            x = CELL_SIZE * i
+            x = CELL_SIZE * i + 4
             self.canvas.create_line(x, 0, x, HEIGHT, fill=GRID_LINE_COLOUR)
 
         for i in range(1, NUM_ROWS):
-            y = CELL_SIZE * i
+            y = CELL_SIZE * i + 4
             self.canvas.create_line(0, y, WIDTH, y, fill=GRID_LINE_COLOUR)
 
         # Fill in the alternating cell background pattern
@@ -448,6 +449,7 @@ class GameManager():
 
 
 MASTER = Tk()
+MASTER.wm_title(WINDOW_TITLE)
 
 snakeData = [
         {"name":"Bob",
