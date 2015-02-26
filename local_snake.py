@@ -7,20 +7,21 @@ import math
 import time
 
 MARGIN = 5
-CELL_SIZE = 30
-NUM_ROWS = 20
-NUM_COLS = 20
+CELL_SIZE = 22
+NUM_ROWS = 30
+NUM_COLS = 30
 WIDTH = CELL_SIZE * NUM_ROWS
 HEIGHT = CELL_SIZE * NUM_COLS
-DELAY = 100
-GRID_LINE_COLOUR = "red"
-SNAKE_DEFAULT_COLOUR = "purple"
+DELAY = 50
+SNAKE_DEFAULT_COLOUR = "#FF3300"
 SERVER_IP = "localhost"
 SERVER_PORT = 9999
-SOLID_WALLS = False
-GRID_BACKGROUND_COLOUR_1 = "#FFFF66"
-GRID_BACKGROUND_COLOUR_2 = "#FFFF94"
+SOLID_WALLS = True
+GRID_BACKGROUND_COLOUR_1 = "#000066"
+GRID_BACKGROUND_COLOUR_2 = "#191975"
+GRID_LINE_COLOUR = "#4D4D94"
 WINDOW_TITLE = "Cobra"
+DEFAULT_FONT = ("Arial", "12")
 
 class Vector2():
     def __init__(self, x, y):
@@ -56,7 +57,7 @@ class Snake():
         self.ready = False
 
     # Queries the input manager to see if direction has been changed due to key press
-    def update(self):
+    def update(self, inputManager):
         self.trail.append(self.gridPos)
         if self.alive:
             d = self.direction
@@ -65,7 +66,7 @@ class Snake():
 
                 # Prevent the snake from turning back on itself
                 turnedBack = sorted([i,d]) == [0,2] or sorted([i,d]) == [1,3]
-                if INPUT_MANAGER.wasKeyPressed(keySym) and not turnedBack:
+                if inputManager.wasKeyPressed(keySym) and not turnedBack:
                     self.direction = i
 
             if d == 0:
@@ -81,12 +82,12 @@ class Snake():
         self.gridPos.x %= gridWidth
         self.gridPos.y %= gridHeight
 
-    def isReady(self):
+    def isReady(self, inputManager):
         if self.ready:
             return True
 
         for i in range(0, 4):
-            if INPUT_MANAGER.wasKeyPressed(self.movementKeys[i]):
+            if inputManager.wasKeyPressed(self.movementKeys[i]):
                 self.direction = i
                 self.ready = True
                 print("Snake {0} is ready.".format(str(self.idNum)))
@@ -293,10 +294,14 @@ class GameManager():
         self.gameOver = False
         self.allSnakesReady = False
         self.paused = False
-        self.pauseTimer = time.time() 
+        self.pauseTime = 0
+        self.UIManager = None #set in start
+        self.InputManager = None # set in start
 
-    def start(self, uiManager, snakeData):
-        self.UIManager = uiManager
+    def start(self, snakeData):        
+        self.UIManager = UIManager(MASTER)
+        self.InputManager = InputManager()
+        MASTER.bind_all('<Key>', self.InputManager.handleKeyPress) # THIS COULD CAUSE A BUG IF TRYING TO PLAY A SECOND GAME
         self.numPlayers = len(snakeData)
 
         # Given n players, construct a n-sided regular polygon and use the vertices to decide on snake starting points.
@@ -350,9 +355,8 @@ class GameManager():
         self.numDeadSnakes = 0
         self.allSnakesReady = False
         self.UIManager.updateSnakeScores(self.snakes)
-        self.pause(1)
+        self.pause(1000)
         print("New round started.")
-
 
     def endGame(self, winningSnake):
         print("Game ending.")
@@ -374,11 +378,12 @@ class GameManager():
 
         self.UIManager.updateSnakeScores(self.snakes)
         self.UIManager.renderGameOverBox("Game over. " + victoryMessage)
-        self.pause(5)
+        MASTER.unbind('<Key>') # unbind from input_manager
+        self.pause(5000)
 
     def pause(self, duration):
         self.paused = True
-        self.pauseTimer = time.time() + duration
+        self.pauseTime = duration
 
     def getSnakeById(self, idNum):
         return self.snakes[idNum-1]
@@ -391,7 +396,7 @@ class GameManager():
         if not self.allSnakesReady:
             numReadySnakes = 0
             for snake in self.snakes:
-                if snake.isReady():
+                if snake.isReady(self.InputManager):
                     numReadySnakes += 1
                 else:
                     idleSnake = snake
@@ -409,7 +414,7 @@ class GameManager():
         else:
             for snake in self.snakes:
                 if snake.alive:
-                    snake.update()
+                    snake.update(self.InputManager)
 
                     cellData = self.gameBoard.getCellData(snake.gridPos)
                     if cellData == -1: #the snake hit a wall
@@ -426,68 +431,179 @@ class GameManager():
                         self.numDeadSnakes += 1
         
     def render(self):
-        if self.roundJustFinished:
+        if self.gameOver:
+            return
+        elif self.roundJustFinished and not self.paused:
             self.roundJustFinished = False
             self.UIManager.renderScenery()
-
-        self.UIManager.renderSnakes(self.snakes)
+        else:
+            self.UIManager.renderSnakes(self.snakes)
 
     def loop(self):
-        if self.paused:
-            if time.time() > self.pauseTimer:
-                self.paused = False
-                self.loop()
-            else:
-                return
-        elif self.gameOver:
+        print("Game looping.")
+        if self.gameOver:
+            # Restart main menu
+            for child in MASTER.winfo_children():
+                child.grid_forget()
+            m = MainMenu(MASTER)
+            m.start()
+            print("Starting main menu.")
             return
+            
         else:
             self.update()
-            if self.paused:
-                return
-            else:
-                self.render()
+            self.render()
+
+        if self.paused:
+            MASTER.after(DELAY + self.pauseTime, self.loop)
+            self.paused = False
+            self.pauseTime = 0
+        else:
+            MASTER.after(DELAY, self.loop)
+        self.InputManager.clear()
 
 class MainMenu():
+    class PlayerEntryRow():
+        def __init__(self, master, rowNum):
+            self.deleted = False
+            self.colourPickerColour = SNAKE_DEFAULT_COLOUR
+            self.rowNum = rowNum
+            self.name = ""
+            self.colour = SNAKE_DEFAULT_COLOUR
+            self.movementKeys = ['w','d','s','a']
+            
+            nameEntry = Entry(master, font=("Arial", "12"), justify="center")
+            nameEntry.grid(row=rowNum, column=0)
+            self.nameEntry = nameEntry
+
+            colourPicker = Canvas(master, width=30, height=30)
+            colourPicker.create_rectangle(0,0,30,30,fill=SNAKE_DEFAULT_COLOUR)
+            colourPicker.grid(row=rowNum, column=1)
+            colourPicker.bind("<Button-1>", self.editColour)
+            self.colourPicker = colourPicker
+
+            movementOptions = [
+                "WASD",
+                "YGHJ",
+                "PL;'",
+                "Arrow keys"
+            ]
+            defaultOption = StringVar(master)
+            defaultOption.set(movementOptions[0])
+            movementKeysPicker = OptionMenu(master, defaultOption, *tuple(movementOptions))
+            movementKeysPicker.grid(row=rowNum, column=2)
+            self.movementKeysPicker = movementKeysPicker
+
+            if rowNum > 2:
+                # There must be a minimum of two players so don't allow the user to delete the 1st or 2nd player
+                deleteButton = Button(master, font=DEFAULT_FONT, justify="center", text="Delete", command=self.delete)
+                deleteButton.grid(row=rowNum, column=3)
+                self.deleteButton = deleteButton
+
+        def editColour(self, event):
+            (rgbVals, colourString) = askcolor()
+            self.colourPicker.create_rectangle(0,0,30,30,fill=colourString)
+            self.colourPickerColour = colourString
+            print("Edit colour: " + colourString)
+
+        def getPlayerData(self):
+            name = self.nameEntry.get()
+            colour = self.colourPickerColour
+            keys = self.movementKeysPicker["text"]
+            if keys == "WASD":
+                print("Keys: WASD")
+                keys = ['w','d','s','a']
+            elif keys == "YGHJ":
+                print("Keys: YGHJ")
+                keys = ['y','j','h','g']
+            elif keys == "PL;'":
+                print("Keys: PL;'")
+                keys = ['p', "'", ';', 'l']
+            elif keys == "Arrow keys":
+                print("Keys: Arrow keys")
+                keys = ['Up', 'Right', 'Down', 'Left']
+            else:
+                print("getPlayerData(): movementKeysPicker value not recognized! - " + keys)
+
+            return {"name": name, "colour": colour, "movementKeys": keys}
+
+        def delete(self):
+            self.deleted = True
+            # Delete all the widgets
+            self.nameEntry.grid_forget()
+            self.colourPicker.grid_forget()
+            self.movementKeysPicker.grid_forget()
+            self.deleteButton.grid_forget()
+
+        #END OF PlayerEntryRow
+
     def __init__(self, master):
         self.master = master
-        self.snakeEntries = []
         self.defaultFont = ("Arial", "12")
         self.numRowsUsed = 0
         self.ready = False
+        self.playerEntryFrame = None # set in start method
+        self.playerEntryRows = []
 
     def start(self):
+        print("Started main menu")
         # Main title
         title = Label(self.master, font=("Arial", "16", "bold"), justify="center", text="Cobra", padx=15, pady=15)
         title.grid(row=0, column=0, columnspan=3)
         self.numRowsUsed += 1
+        
+        # Buttons
+        buttonFrame = Frame(width=WIDTH)
+        buttonFrame.grid(row=self.numRowsUsed, columnspan=3)
+        # Add new player button
+        newPlayerButton = Button(buttonFrame, text="Add a player", command=self.addPlayerEntryRow)
+        newPlayerButton.grid(row=self.numRowsUsed, column=0)
+        # Play button
+        playButton = Button(buttonFrame, text="Play!", command=self.play)
+        playButton.grid(row=self.numRowsUsed, column=1)
+        # Quit button
+        quitButton = Button(buttonFrame, text="Quit :(", command=self.quit)
+        quitButton.grid(row=self.numRowsUsed, column=2)
+        self.numRowsUsed += 1
 
+        # Player entry frame
+        self.playerEntryFrame = Frame()
+        self.playerEntryFrame.grid(row=self.numRowsUsed)
+        self.numRowsUsed += 1
+        
         # Column headings
         headings = ["Name", "Colour", "Movement keys"]
         for i in range(0, len(headings)):
-            w = Label(self.master, font=("Arial","12", "bold"), justify="center", text=headings[i])
-            w.grid(row=self.numRowsUsed, column=i)
-        self.numRowsUsed += 1
+            w = Label(self.playerEntryFrame, font=("Arial","12", "bold"), justify="center", text=headings[i])
+            w.grid(row=0, column=i)
 
-    def addNewPlayerLine(self):
-        nameEntry = Entry(self.master, font=self.defaultFont, justify="center")
-        nameEntry.grid(row=self.numRowsUsed, column=0)
+        # Should be a minimum of 2 players
+        self.addPlayerEntryRow()
+        self.addPlayerEntryRow()
+        print("Finished creating menu widgets")
 
-        colourPicker = Canvas(self.master, width=30, height=30)
-        colourPicker.create_rectangle(0,0,30,30,fill=SNAKE_DEFAULT_COLOUR)
-        colourPicker.grid(row=self.numRowsUsed, column=1)
-
-        def colourPickerCallback(event):
-            (rgbVals, colourString) = askcolor()
-            colourPicker.create_rectangle(0,0,30,30,fill=colourString)
-            print(colourString)
-
-        colourPicker.bind("<Button-1>", colourPickerCallback)
-
-    def getSnakeData(self):
-        return
+    def addPlayerEntryRow(self):
+        row = self.PlayerEntryRow( self.playerEntryFrame, len(self.playerEntryRows)+1 ) #+1 due to labels row
+        self.playerEntryRows.append(row) 
         
+    def quit(self):
+        self.master.destroy()
+        sys.exit()
 
+    def play(self):
+        print("Playing game")
+        for child in MASTER.winfo_children():
+            child.grid_forget()
+            
+        playerData = []
+        for row in self.playerEntryRows:
+            if not row.deleted:
+                playerData.append(row.getPlayerData())
+
+        print("Player data: " + str(playerData))
+        gm = GameManager(maxScore=5)
+        gm.start(playerData)
+        gm.loop()
 
 MASTER = Tk()
 MASTER.wm_title(WINDOW_TITLE)
@@ -495,36 +611,5 @@ MASTER.resizable(width=False, height=False)
 
 MAIN_MENU = MainMenu(MASTER)
 MAIN_MENU.start()
-MAIN_MENU.addNewPlayerLine()
-MASTER.mainloop()
-while not MAIN_MENU.ready:
-    continue
 
-snakeData = [
-        {"name":"Bob",
-         "colour":"red",
-         "movementKeys": ['Up', 'Right', 'Down', 'Left']},
-        {"name":"Arnold",
-         "colour":"blue",
-         "movementKeys": ['w','d','s','a']}
-        ]
-
-UI_MANAGER = UIManager(MASTER)
-
-INPUT_MANAGER = InputManager()
-MASTER.bind_all('<Key>', INPUT_MANAGER.handleKeyPress)
-
-GAME_MANAGER = GameManager()
-GAME_MANAGER.start(UI_MANAGER, snakeData)
-
-def gameLoop():
-    GAME_MANAGER.loop()
-    INPUT_MANAGER.clear()
-    if GAME_MANAGER.gameOver and not GAME_MANAGER.paused:
-        MASTER.quit()
-        sys.exit()
-    else:
-        MASTER.after(DELAY, gameLoop)
-
-MASTER.after(DELAY, gameLoop)
 MASTER.mainloop()
