@@ -1,4 +1,5 @@
 from tkinter import *
+from tkinter.colorchooser import *
 from vectors import *
 import json
 import sys
@@ -447,9 +448,57 @@ class GameManager():
             else:
                 self.render()
 
+class MainMenu():
+    def __init__(self, master):
+        self.master = master
+        self.snakeEntries = []
+        self.defaultFont = ("Arial", "12")
+        self.numRowsUsed = 0
+        self.ready = False
+
+    def start(self):
+        # Main title
+        title = Label(self.master, font=("Arial", "16", "bold"), justify="center", text="Cobra", padx=15, pady=15)
+        title.grid(row=0, column=0, columnspan=3)
+        self.numRowsUsed += 1
+
+        # Column headings
+        headings = ["Name", "Colour", "Movement keys"]
+        for i in range(0, len(headings)):
+            w = Label(self.master, font=("Arial","12", "bold"), justify="center", text=headings[i])
+            w.grid(row=self.numRowsUsed, column=i)
+        self.numRowsUsed += 1
+
+    def addNewPlayerLine(self):
+        nameEntry = Entry(self.master, font=self.defaultFont, justify="center")
+        nameEntry.grid(row=self.numRowsUsed, column=0)
+
+        colourPicker = Canvas(self.master, width=30, height=30)
+        colourPicker.create_rectangle(0,0,30,30,fill=SNAKE_DEFAULT_COLOUR)
+        colourPicker.grid(row=self.numRowsUsed, column=1)
+
+        def colourPickerCallback(event):
+            (rgbVals, colourString) = askcolor()
+            colourPicker.create_rectangle(0,0,30,30,fill=colourString)
+            print(colourString)
+
+        colourPicker.bind("<Button-1>", colourPickerCallback)
+
+    def getSnakeData(self):
+        return
+        
+
 
 MASTER = Tk()
 MASTER.wm_title(WINDOW_TITLE)
+MASTER.resizable(width=False, height=False)
+
+MAIN_MENU = MainMenu(MASTER)
+MAIN_MENU.start()
+MAIN_MENU.addNewPlayerLine()
+MASTER.mainloop()
+while not MAIN_MENU.ready:
+    continue
 
 snakeData = [
         {"name":"Bob",
