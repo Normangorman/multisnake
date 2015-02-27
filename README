@@ -1,0 +1,12 @@
+Multisnake
+==========
+
+Multi-player snake written in Python 3 with Tkinter.
+
+I have plans to enable the game to be played over the network, and to add more gameplay modes.
+Currently there are only 4 local players supported. It's easy to add more - but there are only so many keys on one keyboard.
+
+Screenshots
+-----------
+![](https://raw.githubusercontent.com/Normangorman/multisnake/master/gameplay.gif)
+![](https://raw.githubusercontent.com/Normangorman/multisnake/master/mainmenu.gif)
