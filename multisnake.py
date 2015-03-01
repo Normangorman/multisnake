@@ -4,6 +4,7 @@ import json
 import sys
 import math
 import time
+import random
 
 # Game dimensions:
 CELL_SIZE = 22
@@ -37,16 +38,16 @@ class Vector2():
         return "x: {0}, y: {1}".format(self.x, self.y)
     
 class Snake():
-    def __init__(self, idNum, startPos, name, inputManager, colour=SNAKE_DEFAULT_COLOUR, movementKeys=['w','d','s','a']):
+    def __init__(self, idNum, name, colour, startPos):
         self.idNum = idNum
-        self.startPos = startPos
-        self.gridPos = Vector2(startPos.x, startPos.y)
         self.name = name
-        self.InputManager = inputManager
-        self.direction = 0
-        self.movementKeys = movementKeys
-        self.alive = True
         self.colour = colour
+        self.startPos = startPos
+
+        # Set defaults
+        self.gridPos = Vector2(startPos.x, startPos.y)
+        self.direction = 0
+        self.alive = True
         self.score = 0
         self.ready = False
         self.hasRoundStarted = False
@@ -72,12 +73,14 @@ class Snake():
             else:
                 self.gridPos.x -= 1
 
+    def canTurn(self, d):
+        return sorted([self.direction,d]) != [0,2] and sorted([self.direction,d]) != [1,3]
+
     def turn(self, d):
         self.ready = True
         # Prevent the snake from turning back on itself, but if the round hasn't started yet they can turn where they like.
-        turnedBack = sorted([self.direction,d]) == [0,2] or sorted([self.direction,d]) == [1,3]
 
-        if not turnedBack or not self.hasRoundStarted:
+        if self.canTurn(d) or not self.hasRoundStarted:
             self.direction = d
         else:
             return
@@ -94,12 +97,110 @@ class Snake():
         self.alive = False
         return
 
-    def setupBindings(self, inputManager):
+class HumanSnake(Snake):
+    def __init__(self, idNum, name, colour, startPos, inputManager, movementKeys):
+        Snake.__init__(self, idNum, name, colour, startPos)
+        self.isHuman = True
+
+        # Bind movement keys.
         # Important not to do this in a loop or the lambdas will retain the value of the last loop variable
-        inputManager.bind(self.movementKeys[0], lambda: self.turn(0))
-        inputManager.bind(self.movementKeys[1], lambda: self.turn(1))
-        inputManager.bind(self.movementKeys[2], lambda: self.turn(2))
-        inputManager.bind(self.movementKeys[3], lambda: self.turn(3))
+        inputManager.bind(movementKeys[0], lambda: self.turn(0))
+        inputManager.bind(movementKeys[1], lambda: self.turn(1))
+        inputManager.bind(movementKeys[2], lambda: self.turn(2))
+        inputManager.bind(movementKeys[3], lambda: self.turn(3))
+
+class ComputerSnake(Snake):
+    def __init__(self, idNum, name, colour, startPos, strength):
+        Snake.__init__(self, idNum, name, colour, startPos)
+        self.strength = strength
+        self.isHuman = False
+
+    def isReady(self):
+        return True
+
+    def turn(self, gameBoard):
+        # TODO: add more of these
+        print("Computer player {0} turning from pos {1}".format(self.idNum, self.gridPos.toString()))
+        if self.strength == 1:
+            self.alg1(gameBoard)
+        elif self.strength == 2:
+            self.alg2(gameBoard)
+        else:
+            print("ERROR: no function found corresponding to snake strength of: " + str(self.strength))
+            sys.exit()
+
+        print("")
+
+    def alg1(self, gameBoard):
+        # Greedy algorithm. Only look at the surrounding cells and pick one that's not solid.
+        dirs = [0,1,2,3]
+        random.shuffle(dirs)
+        for d in dirs:
+            if not self.canTurn(d):
+                continue
+            
+            if d == 0:
+                cell = Vector2(self.gridPos.x, self.gridPos.y-1)
+            elif d == 1:
+                cell = Vector2(self.gridPos.x+1, self.gridPos.y)
+            elif d == 2:
+                cell = Vector2(self.gridPos.x, self.gridPos.y+1)
+            else:
+                cell = Vector2(self.gridPos.x-1, self.gridPos.y)
+
+            
+            if gameBoard.getCellData(cell) == 0:# the cell is empty
+                self.direction = d
+                break
+
+    def alg2(self, gameBoard):
+        # Look two squares ahead and find the path with the most space.
+        def getNeighbours(cell):
+             return [Vector2(cell.x, cell.y-1),
+                     Vector2(cell.x+1, cell.y),
+                     Vector2(cell.x, cell.y+1),
+                     Vector2(cell.x-1, cell.y)]
+
+        # Return 0 if cell is not empty
+        # Else get the number of open cells around the given cell
+        def spaceFunc(cell):
+            if gameBoard.getCellData(cell) != 0:
+                return 0
+            else:
+                space = 0
+                for c in getNeighbours(cell):
+                    cellData = gameBoard.getCellData(c)
+                    if cellData == 0: space += 1
+                return space
+
+        bestDir = 0
+        bestSpaceFunc = 0
+
+        # Introduce some non-determinism
+        neighbours = getNeighbours(self.gridPos)
+        dirs = [0,1,2,3]
+        random.shuffle(dirs)
+        for d in dirs:
+            neighbour = neighbours[d]
+            cellData = gameBoard.getCellData(neighbour)
+            if cellData != 0:
+                print("d = {0} is solid".format(str(d)))
+                continue
+            else:
+                space = 0
+                for c in getNeighbours(neighbour):
+                    # Don't worry about it turning back and considering the current cell
+                    # because the spaceFunc would be 0 anyway
+                    space += spaceFunc(c)
+
+                print("space for d={0} is {1}".format(str(d), str(space)))
+                if space > bestSpaceFunc:
+                    print("It's the best found so far so using it.")
+                    bestSpaceFunc = space 
+                    bestDir = d
+
+        self.direction = bestDir
+
 
 
 class GameBoard():
@@ -319,8 +420,6 @@ class GameManager():
         self.pauseTime = 0
         self.reRenderScenery = True
         self.UIManager = None #set in start
-        self.previousFrameTime = None # set in start
-        
 
     def start(self, snakeData):        
         self.UIManager = UIManager(MASTER)
@@ -340,28 +439,31 @@ class GameManager():
 
         # Create snake objects and add them to players list, using the starting points just created.
         for i in range(1, self.numPlayers + 1):
-            snake_idNum = i
-            snake_startPoint = startPoints[i-1]
-            snake_colour = snakeData[i-1]["colour"]
-            snake_keys = snakeData[i-1]["movementKeys"]
-            snake_name = snakeData[i-1]["name"]
+            idNum      = i
+            name       = snakeData[i-1]["name"]
+            colour     = snakeData[i-1]["colour"]
+            startPoint = startPoints[i-1]
+            isHuman    = snakeData[i-1]["isHuman"]
 
-            if snake_name == "":
-                snake_name = "Player " + str(snake_idNum)
+            if name == "":
+                name = "Player " + str(idNum)
 
-            s = Snake(snake_idNum, snake_startPoint, snake_name, self.InputManager, colour=snake_colour, movementKeys=snake_keys)
-            s.setupBindings(self.InputManager)
+            if isHuman:
+                keys = snakeData[i-1]["movementKeys"]
+                s = HumanSnake(idNum, name, colour, startPoint, self.InputManager, keys)
+            else:
+                strength = snakeData[i-1]["strength"]
+                s = ComputerSnake(idNum, name, colour, startPoint, strength)
+
             self.snakes.append(s)
             self.gameBoard.markCell(s.gridPos, s.idNum)
-            print("Snake made. idNum: {0}, name: {1}".format(snake_idNum, snake_name))
+            print("Snake made. idNum: {0}, name: {1}".format(idNum, name))
 
         self.UIManager.setupGame(self.snakes)
-        self.previousFrameTime = time.time()
 
     def endRound(self):
         print("Round over.")
         self.gameBoard.reset()
-        self.numDeadSnakes = 0
         self.allSnakesReady = False
         self.UIManager.updateSnakeScores(self.snakes)
         self.reRenderScenery = True 
@@ -383,6 +485,7 @@ class GameManager():
             snake.reset()
             self.gameBoard.markCell(snake.gridPos, snake.idNum) #fixes bug where snake starting cell is not marked on grid
 
+        self.numDeadSnakes = 0
         self.pause(1000)
 
     def endGame(self, winningSnake):
@@ -406,10 +509,6 @@ class GameManager():
         self.UIManager.renderGameOverBox("Game over. " + victoryMessage)
         self.InputManager.unbindAll()
         self.pause(5000)
-
-        ###~!~!~!~!~!~!~!~###
-        MASTER.destroy()
-        sys.exit(0)
 
     def pause(self, duration):
         self.paused = True
@@ -444,6 +543,9 @@ class GameManager():
         else:
             for snake in self.snakes:
                 if snake.alive:
+                    if not snake.isHuman:
+                        snake.turn(self.gameBoard)
+
                     snake.update()
 
                     cellData = self.gameBoard.getCellData(snake.gridPos)
@@ -501,6 +603,8 @@ class MainMenu():
             self.name = ""
             self.colour = SNAKE_DEFAULT_COLOUR
             self.movementKeys = ['w','d','s','a']
+            self.isComputer = False
+            self.computerStrength = 1
             
             nameEntry = Entry(master, font=("Arial", "12"), justify="center")
             nameEntry.grid(row=rowNum, column=0)
@@ -518,16 +622,27 @@ class MainMenu():
                 "PL;'",
                 "Arrow keys"
             ]
-            defaultOption = StringVar(master)
-            defaultOption.set(movementOptions[0])
-            movementKeysPicker = OptionMenu(master, defaultOption, *tuple(movementOptions))
+            defaultKeys = StringVar(master)
+            defaultKeys.set(movementOptions[0])
+            movementKeysPicker = OptionMenu(master, defaultKeys, *tuple(movementOptions))
             movementKeysPicker.grid(row=rowNum, column=2)
             self.movementKeysPicker = movementKeysPicker
+
+            computerOption = IntVar()
+            computerOption.set(0) #human by default
+            isComputerCheckbutton = Checkbutton(master, variable=computerOption)
+            isComputerCheckbutton.var = computerOption
+            isComputerCheckbutton.grid(row=rowNum, column=3)
+            self.isComputerCheckbutton = isComputerCheckbutton
+
+            computerStrengthScale = Scale(master, from_=1, to=2, orient="horizontal")
+            computerStrengthScale.grid(row=rowNum, column=4)
+            self.computerStrengthScale = computerStrengthScale
 
             if rowNum > 2:
                 # There must be a minimum of two players so don't allow the user to delete the 1st or 2nd player
                 deleteButton = Button(master, font=DEFAULT_FONT, justify="center", text="Delete", command=self.delete)
-                deleteButton.grid(row=rowNum, column=3)
+                deleteButton.grid(row=rowNum, column=5)
                 self.deleteButton = deleteButton
 
         def editColour(self, event):
@@ -539,6 +654,11 @@ class MainMenu():
         def getPlayerData(self):
             name = self.nameEntry.get()
             colour = self.colourPickerColour
+            if self.isComputerCheckbutton.var.get() == 1:
+                isComputer = True 
+            else:
+                isComputer = False
+            strength = self.computerStrengthScale.get() 
             keys = self.movementKeysPicker["text"]
             if keys == "WASD":
                 print("Keys: WASD")
@@ -555,7 +675,14 @@ class MainMenu():
             else:
                 print("getPlayerData(): movementKeysPicker value not recognized! - " + keys)
 
-            return {"name": name, "colour": colour, "movementKeys": keys}
+            playerData = {}
+            playerData["name"] = name
+            playerData["colour"] = colour
+            playerData["isHuman"] = not isComputer 
+            playerData["strength"] = strength
+            playerData["movementKeys"] = keys
+
+            return playerData
 
         def delete(self):
             self.deleted = True
@@ -660,7 +787,7 @@ class MainMenu():
         self.numRowsUsed += 1
         
         # Column headings
-        headings = ["Name", "Colour", "Movement keys"]
+        headings = ["Name", "Colour", "Movement keys", "Is computer", "Computer strength"]
         for i in range(0, len(headings)):
             w = Label(self.playerEntryFrame, font=("Arial","12", "bold"), justify="center", text=headings[i])
             w.grid(row=0, column=i)
