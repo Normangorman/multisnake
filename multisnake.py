@@ -182,7 +182,6 @@ class ComputerSnake(Snake):
             neighbour = neighbours[d]
             cellData = gameBoard.getCellData(neighbour)
             if cellData != 0:
-                print("d = {0} is solid".format(str(d)))
                 continue
             else:
                 space = 0
@@ -191,9 +190,7 @@ class ComputerSnake(Snake):
                     # because the spaceFunc would be 0 anyway
                     space += spaceFunc(c)
 
-                print("space for d={0} is {1}".format(str(d), str(space)))
                 if space > bestSpaceFunc:
-                    print("It's the best found so far so using it.")
                     bestSpaceFunc = space 
                     bestDir = d
 
@@ -719,7 +716,7 @@ class MainMenu():
                 keys = ['y','j','h','g']
             elif keys == "PL;'":
                 print("Keys: PL;'")
-                keys = ['p', "'", 'quoteright', 'semicolon']
+                keys = ['p', 'quoteright', 'semicolon', 'l']
             elif keys == "Arrow keys":
                 print("Keys: Arrow keys")
                 keys = ['Up', 'Right', 'Down', 'Left']
@@ -742,6 +739,8 @@ class MainMenu():
             self.colourPicker.grid_forget()
             self.movementKeysPicker.grid_forget()
             self.deleteButton.grid_forget()
+            self.isComputerCheckbutton.grid_forget()
+            self.computerStrengthScale.grid_forget()
 
         #END OF PlayerEntryRow
 
