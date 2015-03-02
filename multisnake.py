@@ -119,17 +119,15 @@ class ComputerSnake(Snake):
         return True
 
     def turn(self, gameBoard):
-        # TODO: add more of these
-        print("Computer player {0} turning from pos {1}".format(self.idNum, self.gridPos.toString()))
         if self.strength == 1:
             self.alg1(gameBoard)
         elif self.strength == 2:
             self.alg2(gameBoard)
+        elif self.strength == 3:
+            self.alg3(gameBoard)
         else:
             print("ERROR: no function found corresponding to snake strength of: " + str(self.strength))
             sys.exit()
-
-        print("")
 
     def alg1(self, gameBoard):
         # Greedy algorithm. Only look at the surrounding cells and pick one that's not solid.
@@ -201,21 +199,74 @@ class ComputerSnake(Snake):
 
         self.direction = bestDir
 
+    def alg3(self, gameBoard):
+        # Uses floodfill to get the direction with the most available space.
+        x = self.gridPos.x
+        y = self.gridPos.y 
+        neighbours = [(x, y-1), (x+1, y), (x,y+1), (x-1,y)]
 
+        # Introduces randomness by shifting the possible directions a bit
+        if random.random() < 0.2:
+            shift = random.randint(0,3)
+        else:
+            shift = self.direction
+        dirs = [0,1,2,3]
+        dirs = dirs[shift:] + dirs[:shift]
+
+        bestArea = 0
+        bestDir  = self.direction
+        checkedCells = set()
+        for d in dirs:
+            cell = neighbours[d]
+
+            if gameBoard.getCellData(Vector2(*cell)) != 0 or cell in checkedCells:
+                # it's solid or checked.
+                continue
+            else:
+                (area, checked) = self.alg3_getArea(cell, gameBoard)
+                checkedCells = checkedCells.union(checked)
+                if area > bestArea:
+                    bestArea = area 
+                    bestDir = d
+
+        self.direction = bestDir
+
+    def alg3_getArea(self, cell, gameBoard):
+        # assumes that the cell is empty
+        area = 0
+        checked = set() 
+        stack = [cell] 
+
+        while len(stack) > 0:
+            (x, y) = stack.pop()
+
+            if not (x,y) in checked and gameBoard.getCellData(Vector2(x,y)) == 0:
+                area += 1
+                checked.add((x,y))
+                if x > 0:
+                    stack.append((x - 1, y))
+                if x < (gameBoard.width - 1):
+                    stack.append((x + 1, y))
+                if y > 0:
+                    stack.append((x, y - 1))
+                if y < (gameBoard.height - 1):
+                    stack.append((x, y + 1))
+
+        return (area, checked)
 
 class GameBoard():
-    def __init__(self, boardHeight, boardWidth):
-        self.boardHeight = boardHeight
-        self.boardWidth  = boardWidth
+    def __init__(self, height, width):
+        self.height = height
+        self.width  = width
         self.board = []
-        for i in range (0, boardHeight):
+        for i in range (0, height):
             self.board.append([])
-            for j in range(0, boardWidth):
+            for j in range(0, width):
                 self.board[i].append(0)
 
     def reset(self):
-        for i in range (0, self.boardHeight):
-            for j in range(0, self.boardWidth):
+        for i in range (0, self.height):
+            for j in range(0, self.width):
                 self.board[i][j] = 0
 
     # mark the cell as occupied with the respective snake's id number
@@ -224,7 +275,7 @@ class GameBoard():
 
     def _isCellOutOfBounds(self, vecPos):
         isTooSmall = vecPos.y < 0 or vecPos.x < 0
-        isTooLarge = vecPos.y > self.boardHeight - 1 or vecPos.x > self.boardWidth - 1
+        isTooLarge = vecPos.y > self.height - 1 or vecPos.x > self.width - 1
         return isTooSmall or isTooLarge
 
     def getCellData(self, vecPos):
@@ -465,7 +516,6 @@ class GameManager():
         print("Round over.")
         self.gameBoard.reset()
         self.allSnakesReady = False
-        self.UIManager.updateSnakeScores(self.snakes)
         self.reRenderScenery = True 
 
         if self.numDeadSnakes == self.numPlayers: #multiple snakes died simultaneously so it's a draw
@@ -485,6 +535,7 @@ class GameManager():
             snake.reset()
             self.gameBoard.markCell(snake.gridPos, snake.idNum) #fixes bug where snake starting cell is not marked on grid
 
+        self.UIManager.updateSnakeScores(self.snakes)
         self.numDeadSnakes = 0
         self.pause(1000)
 
@@ -635,7 +686,7 @@ class MainMenu():
             isComputerCheckbutton.grid(row=rowNum, column=3)
             self.isComputerCheckbutton = isComputerCheckbutton
 
-            computerStrengthScale = Scale(master, from_=1, to=2, orient="horizontal")
+            computerStrengthScale = Scale(master, from_=1, to=3, orient="horizontal")
             computerStrengthScale.grid(row=rowNum, column=4)
             self.computerStrengthScale = computerStrengthScale
 
